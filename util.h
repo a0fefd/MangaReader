@@ -6,6 +6,7 @@
 #define NB_UTIL
 
 #define MAX_DATA_SIZE (1<<17)
+#define EOS "\n\\EOS\\EOS\n"
 
 #ifndef NB_UTIL_INCL
 #define NB_UTIL_INCL
@@ -24,6 +25,6 @@
 void read_until_eof(FILE *file, size_t *out_size, char *buffer_in);
 int strsplice(char *dest, const char *src, const char *start, const char *end);
 int strsplice_single(char *str, const char *start, const char *end);
-uint32_t strtok_counter(const char *str, const char *delim);
+int strtok_counter(const char *str, const char *delim);
 
 #endif

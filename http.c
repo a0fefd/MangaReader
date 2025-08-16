@@ -70,6 +70,8 @@ SSL_CTX *create_ssl_ctx(void)
 
 int HTTPRequest(SSL_CTX *ssl_context, HTTPWrapper header_wrapper, const uint16_t target_port, char *output_buffer)
 {
+    if (!(header_wrapper.host) || strlen(header_wrapper.host) < 1)
+        return -3;
     const uint64_t socket_file_descriptor = create_socket(target_port, header_wrapper);
 
     char header_string[1024];
@@ -81,22 +83,26 @@ int HTTPRequest(SSL_CTX *ssl_context, HTTPWrapper header_wrapper, const uint16_t
 
     SSL_write(ssl, header_string, (int)strlen(header_string));
 
-    char tempbuf[256]; FILE *tmpf = tmpfile();
-    size_t bytes, culm_bytes = 0;
+    char tempbuf[256] = {0}; char tempstore[MAX_DATA_SIZE] = {0};
+    signed ossl_ssize_t bytes, culm_bytes = 0;
     while ((bytes = SSL_read(ssl, tempbuf, sizeof(tempbuf)-1)) > 0)
     {
-        culm_bytes += bytes;
         tempbuf[bytes] = '\0';
         // puts(tempbuf);
-        fputs(tempbuf, tmpf);
+        memccpy(tempstore+culm_bytes, tempbuf, '\0', bytes+1);
+        culm_bytes += bytes;
     }
-    rewind(tmpf);
 
-    read_until_eof(tmpf, NULL, output_buffer);
+    memccpy(output_buffer, tempstore, '\0', culm_bytes);
 
     SSL_shutdown(ssl);
     SSL_free(ssl);
     close((int)socket_file_descriptor);
+
+    if (tempstore[0] == 0 || tempstore[0] == '\0')
+    {
+        return -3;
+    }
 
     if (strcmp(output_buffer, "HTTP/1.1 200") < 0)
     {
@@ -109,6 +115,9 @@ int HTTPRequest(SSL_CTX *ssl_context, HTTPWrapper header_wrapper, const uint16_t
 
 HTTPWrapper URLToWrapper(const uint16_t method, const char *url)
 {
+    if (!url || strlen(url) < 1)
+        return (HTTPWrapper){0, 0 ,0, 0};
+
     char new_url[1024];
     memcpy(new_url, url, strlen(url));
 

@@ -27,12 +27,12 @@ void read_until_eof(FILE *file, size_t *out_size, char *buffer_in) {
 
     buffer[size] = '\0';  // Optional null terminator
     if (out_size) *out_size = size;
-    memcpy(buffer_in, buffer, size+1);
+    strncpy_s(buffer_in, sizeof(buffer_in)/sizeof(char), buffer, 1);
+    free(buffer);
 }
 
 int strsplice(char *dest, const char *src, const char *start, const char *end)
 {
-    memset(dest, '\0', strlen(dest));
     char dest2[MAX_DATA_SIZE];
     memcpy(dest2, src, strlen(src));
 
@@ -41,6 +41,11 @@ int strsplice(char *dest, const char *src, const char *start, const char *end)
         return -1;
 
     memcpy(dest2, pos, strlen(pos));
+    // strcpy(dest2, pos);
+    if (strcmp(end, EOS) == 0)
+    {
+        strcat(dest2, end);
+    }
     pos = strstr(dest2, end);
     if (!pos)
         return -2;
@@ -64,13 +69,13 @@ int strsplice_single(char *str, const char *start, const char *end)
 
     char str2[MAX_DATA_SIZE] = {'\0'};
     memccpy(str2, str, '\0', size);
-    const int retval = strsplice(str, str2, "<div id=\"chapter", "</div>");
+    const int retval = strsplice(str, str2, start, end);
     return retval;
 }
 
-uint32_t strtok_counter(const char *str, const char *delim)
+int strtok_counter(const char *str, const char *delim)
 {
-    uint32_t counter = 0;
+    int counter = 0;
 
     // char *str2 = (char *)str;
 
