@@ -6,7 +6,7 @@
 #define NB_HTTP
 
 #ifndef NB_SOCKETUTIL
-#include "socketutil.h"
+#include <socketutil.h>
 #endif
 
 #ifndef NB_HTTP_INCL

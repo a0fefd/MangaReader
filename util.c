@@ -2,7 +2,7 @@
 // Created by nbigi0 on 14/08/2025.
 //
 
-#include "util.h"
+#include <util.h>
 
 void read_until_eof(FILE *file, size_t *out_size, char *buffer_in) {
     size_t capacity = 8192;  // Start with 8 KB
@@ -33,27 +33,18 @@ void read_until_eof(FILE *file, size_t *out_size, char *buffer_in) {
 
 int strsplice(char *dest, const char *src, const char *start, const char *end)
 {
-    char dest2[MAX_DATA_SIZE];
-    memcpy(dest2, src, strlen(src));
-
-    char *pos = strstr(src, start);
-    if (!pos)
+    const char *start_pos = strstr(src, start);
+    if (!start_pos)
         return -1;
 
-    memcpy(dest2, pos, strlen(pos));
-    // strcpy(dest2, pos);
-    if (strcmp(end, EOS) == 0)
-    {
-        strcat(dest2, end);
-    }
-    pos = strstr(dest2, end);
-    if (!pos)
+    const char* end_pos = strstr(start_pos, end);
+    if (!end_pos)
         return -2;
 
-    memset(dest2 + (pos - dest2), '\0', strlen(pos));
+    size_t len = end_pos - start_pos;
 
-    memset(dest, '\0', strlen(dest));
-    memccpy(dest, dest2, '\0', strlen(dest2));
+    memcpy(dest, start_pos, len);
+    dest[len] = '\0';
 
     return 0;
 }

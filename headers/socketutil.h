@@ -13,7 +13,7 @@
 #include <signal.h>
 
 #ifndef NB_UTIL
-#include "util.h"
+#include <util.h>
 #endif
 
 void *get_in_addr(struct sockaddr *sa);

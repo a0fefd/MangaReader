@@ -6,8 +6,8 @@
 #include <fcntl.h>
 
 // Local
-#include "util.h"
-#include "http.h"
+#include <util.h>
+#include <http.h>
 
 #define PORT_HTTP 80
 #define PORT_HTTPS 443
@@ -25,18 +25,18 @@ typedef struct MangaInfo_st MangaInfo;
 
 void get_manga_info(MangaInfo manga, char *info_buffer)
 {
-    sprintf(info_buffer, "Title: %s\nChapter #: %d\n", manga.title, manga.chapter_count);
+    sprintf(info_buffer, "Title: \"%s\"\nChapter #: %d\n", manga.title, manga.chapter_count);
 }
 
 MangaInfo __httpget_manga(const int (*HTTPSGet)(SSL_CTX *, const char *, char *), SSL_CTX *ctx, const char url[512],
                           char store[MAX_DATA_SIZE])
 {
     MangaInfo info = {
-        .url = "",
         .title = "",
         .chapter_count = 0
     };
     strcpy_s(info.url, strlen(url), url);
+    info.url[0] = 'h';
 
     char *buf = store;
     int success = HTTPSGet(ctx, info.url, buf);
@@ -158,7 +158,7 @@ int HTTPSGet_ABST(SSL_CTX *ctx, const char *url, char *buf)
     return _httpget(ctx, url, PORT_HTTPS, buf);
 }
 
-MangaInfo get_manga_cp_urls(SSL_CTX *ctx, const char url[512], char **output_buffer, char *buf)
+MangaInfo get_manga_cp_urls(SSL_CTX *ctx, const char *url, char (*output_buffer)[512][512], char *buf)
 {
     if (strlen(url) <= 0)
     {
@@ -166,41 +166,83 @@ MangaInfo get_manga_cp_urls(SSL_CTX *ctx, const char url[512], char **output_buf
     }
 
     char *tmpbuf = malloc(MAX_DATA_SIZE * sizeof(char));
+    char *tmpbuf2 = malloc(MAX_DATA_SIZE * sizeof(char));
     memset(buf, '\0', MAX_DATA_SIZE);
     memset(tmpbuf, '\0', MAX_DATA_SIZE);
+    memset(tmpbuf2, '\0', MAX_DATA_SIZE);
 
     MangaInfo manga = get_manga((const int (*)(SSL_CTX *, const char *, char *)) HTTPSGet_ABST, ctx, url, buf);
     // manga_list[i] = get_manga((const int (*)(SSL_CTX*, const char*, char*))NULL, ctx, urls[i], buf);
 
-    strsplice(tmpbuf, buf, "<div id=\"chapter", "</div>");
-    
-    char *a = strstr(tmpbuf, "<a");
-    strcpy_s(tmpbuf, strlen(a), a);
 
+    
+    char *a = strstr(buf, "<a");
+    memccpy(tmpbuf, a, '\0', strlen(a));
+
+    strsplice(tmpbuf2, tmpbuf, "f=\"", "\" title");
+    char *_chapter_path = strstr(tmpbuf2, "/chap");
+    char *chapter_path = malloc(strlen(_chapter_path) * sizeof(char));
+    memcpy(chapter_path, _chapter_path, strlen(_chapter_path));
+    chapter_path[strlen(_chapter_path)-1] = '\0';
+
+    const char host[] = "https://mangapill.com";
     for (int i = manga.chapter_count - 1; i > -1; i--)
     {
-        char *next = strstr(tmpbuf + 1, "<a");
-        strsplice_single(tmpbuf, "f=\"", "\" title");
-        char *chapter_path = strstr(tmpbuf, "/");
+        memset(output_buffer[0][i], 0, 512);
 
-        strcpy_s(output_buffer[i], 22, "https://mangapill.com");
-        size_t len = strlen(chapter_path);
-        strcat_s(output_buffer[i], len, chapter_path);
-        strcpy_s(tmpbuf, sizeof(next), next);
+        for (int j = 0; j < strlen(chapter_path); j++)
+        {
+            if (j < 21)
+                output_buffer[0][i][j] = host[j];
+            output_buffer[0][i][j+21] = chapter_path[j];
+        }
+
+        itoa(i+1, (output_buffer[0][i]+strlen(chapter_path)+21), 10);
     }
+    free(chapter_path);
+
     free(tmpbuf);
+    free(tmpbuf2);
 
     return manga;
+}
+
+void main_download(MangaInfo manga_list[MANGACOUNT], const char urls[MANGACOUNT][512])
+{
+    SSL_CTX *ctx = create_ssl_ctx();
+    char *buf = malloc(MAX_DATA_SIZE * sizeof(char));
+
+    char (*manga_cp_urls)[MANGACOUNT][512][512] = malloc(MANGACOUNT * 512 * 512 * sizeof(char));
+    memset(manga_cp_urls, '\0', MANGACOUNT * 512 * 512 * sizeof(char));
+    for (int i = 0; i < MANGACOUNT; i++)
+    {
+        const char *url = urls[i];
+        manga_list[i] = get_manga_cp_urls(ctx, url, &manga_cp_urls[0][i], buf);
+    }
+
+    char (*manga_cp_img_urls)[512][1][512] = malloc(512 * 512 * sizeof(char));
+    for (int i = 0; i < MANGACOUNT; i++)
+    {
+        if (strlen(manga_list[i].title) < 1)
+            continue;
+        char info[512];
+        get_manga_info(manga_list[i], info);
+        printf("%s", info);
+        for (int j = 0; j < manga_list[i].chapter_count; j++)
+        {
+            
+        }
+        printf("\n");
+    }
+
+    free(buf);
+    free(manga_cp_urls);
+    SSL_CTX_free(ctx);
 }
 
 int main(void)
 {
     SSL_library_init();
-
-    SSL_CTX *ctx = create_ssl_ctx();
-
-    char *buf = malloc(MAX_DATA_SIZE * sizeof(char));
-
 #ifdef WIN32
     WSADATA wsa_data;
     if (WSAStartup((MAKEWORD(2, 2)), &wsa_data) != 0)
@@ -216,19 +258,20 @@ int main(void)
     }
 #endif
 
-#define HTTPGet(url, output_buffer) _httpget(ctx, url, PORT_HTTP, output_buffer)
-
     char urls[MANGACOUNT][512] = {0};
 
-    FILE *url_list;
-    fopen_s(&url_list, "url_list.txt", "r");
+    FILE *url_list; 
+    fopen_s(&url_list, "url_list.txt", "a");
+    fputc('\n', url_list); // append newline to file due to failed recognition of link when no newline
+
+    freopen_s(&url_list, "url_list.txt", "r", url_list);
     int indexpointer = 0; int c;
     char line[512] = {0}; int lines = 0;
     while ((c = fgetc(url_list)) != EOF)
     {
-        if (c == '\n' || c+1 == EOF)
+        if (c == '\n' && strlen(line) > 20)
         {
-            line[indexpointer] = '\0';
+            // line[indexpointer] = '\0';
             strcpy_s(urls[lines], sizeof(line), line);
             lines++;
             indexpointer = 0;
@@ -238,50 +281,15 @@ int main(void)
         line[indexpointer] = (char)c;
         indexpointer++;
     }
+    fclose(url_list);
 
     MangaInfo manga_list[MANGACOUNT];
-    
-    // for (int i = 0; i < MANGACOUNT; i++)
-    // {
-    //     memset(buf, '\0', MAX_DATA_SIZE * sizeof(char));
-    //     manga_list[i] = get_manga((const int (*)(SSL_CTX *, const char *, char *)) HTTPSGet_ABST, ctx, urls[i], buf);
-    //     // manga_list[i] = get_manga((const int (*)(SSL_CTX*, const char*, char*))NULL, ctx, urls[i], buf);
-    // }
 
-    char (*manga_cp_urls)[MANGACOUNT][512][512] = malloc(MANGACOUNT * 512 * 512 * sizeof(char));
-    memset(manga_cp_urls, 0, MANGACOUNT * 512 * 512 * sizeof(char));
-    for (int i = 0; i < MANGACOUNT; i++)
-    {
-        char **temp_buffer = malloc(512 * sizeof(char*));  // Array of 512 char* pointers
-        for (int j = 0; j < 512; j++) {
-            temp_buffer[j] = malloc(512 * sizeof(char));   // Each string has space for 512 characters
-            memset(temp_buffer[j], '\0', 512);
-        }
-        manga_list[i] = get_manga_cp_urls(ctx, urls[i], temp_buffer, buf);
-        _memccpy(manga_cp_urls[0][i], temp_buffer, '\0', 512 * 512);
-        for (int j = 0; j < 512; j++) {
-            free(temp_buffer[j]);
-        }
-        free(temp_buffer);
-    }
-
-    for (int i = 0; i < MANGACOUNT; i++)
-    {
-        if (strlen(manga_list[i].title) < 1)
-            continue;
-        char info[512];
-        get_manga_info(manga_list[i], info);
-        printf("%s", info);
-        for (int j = 0; j < manga_list[i].chapter_count; j++)
-        {
-            printf("%s\n", manga_cp_urls[0][i][j]);
-        }
-    }
-    free(manga_cp_urls);
+    /// ONLY FOR DOWNLOADING MANGA ///
+    main_download(manga_list, urls);
+    /// ^ ONLY FOR DOWNLOADING MANGA ^ ///
 
     // Cleanup
-    free(buf);
-    SSL_CTX_free(ctx);
     WSACleanup();
 
     return 0;
