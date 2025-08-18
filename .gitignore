@@ -1,3 +1,7 @@
+# Files
 CMakeLists.txt
-cmake-build-*/
-.idea/
+
+# FOLDERS
+.*/
+build/
+lib/*
